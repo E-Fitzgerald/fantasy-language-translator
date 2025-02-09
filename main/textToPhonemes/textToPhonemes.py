@@ -7,6 +7,8 @@ import random
 
 EspeakWrapper.set_library('C:/Program Files/eSpeak NG/libespeak-ng.dll')
 
+# generates a list of words broken down into their phonemes
+# returns: List
 def generate_phonemes(sentence, printout=False, lang="en-us"):
         cleanSent = ''.join(char for char in sentence if char.isalnum() or char.isspace())
         words = cleanSent.split()
@@ -25,7 +27,9 @@ def generate_phonemes(sentence, printout=False, lang="en-us"):
 
         return res
 
-    
+
+# generates english phonemes from a sentence
+# returns: Set
 def generate_english_phonemes(sentence, printout=False, regen=False, name=None):
     if regen:
         phonemes = generate_phonemes(sentence, False, lang="en-us")
@@ -44,18 +48,25 @@ def generate_english_phonemes(sentence, printout=False, regen=False, name=None):
     
     return set(res) - set([''])
 
+# shuffles a list of phonemes
+# returns: List
 def remix_phonemes(phonemes1):
     phoneme_list = list(phonemes1)
     random.shuffle(phoneme_list)
     return phoneme_list
 
+# generates a mapping dict from phonemes1 to phonemes2
+# returns: Dict
 def generate_mapping(phonemes1, phonemes2):
     mapping = {}
     for i in range(len(phonemes1)):
         mapping[phonemes1[i]] = phonemes2[i]
     return mapping
 
+# transcribes a phonetic sentence using a mapping
+# returns: String
 def transcribe(sentence, mapping):
+    print(sentence)
     cleanSent = ''.join(char for char in sentence if char.isalnum() or char.isspace())
     words = cleanSent.split()
 
@@ -69,3 +80,18 @@ def transcribe(sentence, mapping):
         res.append("".join(chars))
 
     return " ".join(res)
+
+# generates a mapping dict from consonants to phonemes2
+def generate_unique_consonant_vowel_mappings(consonants, vowels, i, printout=False):
+    remixed_c = remix_phonemes(consonants)
+    mapping_c = generate_mapping(list(consonants), remixed_c)
+
+    remixed_v = remix_phonemes(vowels)
+    mapping_v = generate_mapping(list(vowels), remixed_v)
+
+    mapping = {**mapping_c, **mapping_v}
+
+    if printout:
+        print(mapping)
+
+    return mapping
