@@ -170,7 +170,6 @@ def test_phonemes(sentence, lang="eng", printout=False):
                 delete_file(file_name)
         
         elif choice == "s":
-            print("in here")
             c = int(input("Enter the mapping number to jump to: "))
 
         elif choice != "r":
