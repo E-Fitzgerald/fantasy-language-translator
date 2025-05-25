@@ -74,15 +74,28 @@ def transcribe(sentence, mapping):
     for word in words:
         phonemizedWord = phonemize(word, language="en-us", separator=Separator(phone="|", word='', syllable='||'))
         chars = phonemizedWord.split("|")
+        print("".join(chars))
         for i in range(len(chars)):
             if chars[i] in mapping:
                 chars[i] = mapping[chars[i]]
-        res.append("".join(chars))
+        word = "".join(chars)
+        res.append(word)
 
     return " ".join(res)
 
 # generates a mapping dict from consonants to phonemes2
-def generate_unique_consonant_vowel_mappings(consonants, vowels, i, printout=False):
+def generate_unique_consonant_vowel_mappings(consonants, vowels, i, printout=False, remix_v = True, remix_c = True):
+    
+    if remix_v:
+        remixed_v = remix_phonemes(vowels)
+    else:
+        remixed_v = list(vowels)
+
+    if remix_c:
+        remixed_c = remix_phonemes(consonants)
+    else:
+        remixed_c = list(consonants)
+    
     remixed_c = remix_phonemes(consonants)
     mapping_c = generate_mapping(list(consonants), remixed_c)
 
@@ -92,6 +105,21 @@ def generate_unique_consonant_vowel_mappings(consonants, vowels, i, printout=Fal
     mapping = {**mapping_c, **mapping_v}
 
     if printout:
+        print("Consonants mapping:")
+        print(mapping_c)
+        print("Vowels mapping:")
+        print(mapping_v)
+        print("Full mapping:")   
         print(mapping)
 
-    return mapping
+    return mapping, mapping_v, mapping_c
+
+def remix_mapping(mapping, printout=False):
+    keys = list(mapping.keys())
+    values = list(mapping.values())
+    random.shuffle(values)
+    new_mapping = dict(zip(keys, values))
+    if printout:
+        print("Remixed mapping:")
+        print(new_mapping)
+    return new_mapping

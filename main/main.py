@@ -1,4 +1,4 @@
-from textToPhonemes.textToPhonemes import generate_phonemes, generate_english_phonemes, remix_phonemes, generate_mapping, transcribe, generate_unique_consonant_vowel_mappings
+from textToPhonemes.textToPhonemes import generate_phonemes, generate_english_phonemes, remix_phonemes, generate_mapping, transcribe, generate_unique_consonant_vowel_mappings, remix_mapping
 from private_vars import getAWSAccessKeyId, getAWSSecret
 import pickle
 import boto3
@@ -70,32 +70,36 @@ def speak(transcription, voice="Emma"):
     polly = boto3.client("polly", region_name='us-west-2',
          aws_access_key_id=getAWSAccessKeyId(),
          aws_secret_access_key= getAWSSecret())
+    
 
-    # generate phoneme tag for polly to read
-    phoneme = f"<phoneme alphabet='ipa' ph='{transcription}'></phoneme>"
+    for word in transcription.split():
+        # generate phoneme tag for polly to read
+        phoneme = f"<phoneme alphabet='ipa' ph='{word}'></phoneme>"
 
-    # send to polly, requesting mp3 back
-    response = polly.synthesize_speech(
-        OutputFormat="mp3",
-        TextType="ssml",
-        Text=phoneme,
-        VoiceId=voice
-    )
+        # send to polly, requesting mp3 back
+        response = polly.synthesize_speech(
+            OutputFormat="mp3",
+            TextType="ssml",
+            Text=phoneme,
+            VoiceId=voice
+        )
 
-    # save polly's returned audio stream to lambda's tmp directory
-    tmpfile = os.path.join("main/cacher/data/audio/", "output.mp3")
-    if "AudioStream" in response:
-        with closing(response["AudioStream"]) as stream:
-            with open(tmpfile, "wb") as file:
-                file.write(stream.read())
+        # save polly's returned audio stream to lambda's tmp directory
+        tmpfile = os.path.join("main/cacher/data/audio/", "output.mp3")
+        if "AudioStream" in response:
+            with closing(response["AudioStream"]) as stream:
+                with open(tmpfile, "wb") as file:
+                    file.write(stream.read())
 
-    #say("main/cacher/data/audio/output", .75)
+        #say("main/cacher/data/audio/output", .75)
 
-    # audio = AudioSegment.from_file("main/cacher/data/audio/output.mp3", format="mp3") # or other formats like "mp3"
-    # slowed_audio = audio._spawn(audio.raw_data, overrides={"frame_rate": int(audio.frame_rate * 0.75)})
-    # slowed_audio = slowed_audio.set_frame_rate(audio.frame_rate)
-    # play(slowed_audio)
-    playsound("main/cacher/data/audio/output.mp3")
+        # audio = AudioSegment.from_file("main/cacher/data/audio/output.mp3", format="mp3") # or other formats like "mp3"
+        # slowed_audio = audio._spawn(audio.raw_data, overrides={"frame_rate": int(audio.frame_rate * 0.75)})
+        # slowed_audio = slowed_audio.set_frame_rate(audio.frame_rate)
+        # play(slowed_audio)
+        playsound("main/cacher/data/audio/output.mp3")
+    
+    time.sleep(0.5)  # wait for the audio to finish playing before continuing
 
 
 
@@ -111,6 +115,8 @@ def test_phonemes(sentence, lang="eng", printout=False):
         eng_vowel_phonemes.add('eɪ')
         eng_vowel_phonemes.add('əl')
         eng_vowel_phonemes.add('ᵻ')
+        speaker = "Amy"
+        print("Using Amazon Polly's Amy voice for English.")
     else:
         exit("Language not supported.")
 
@@ -123,38 +129,48 @@ def test_phonemes(sentence, lang="eng", printout=False):
         
     c = 0
     choice = ""
+    remix_c = True
+    remix_v = True
+
     while True:
-        if choice != "r" and choice != "y":
+        if choice != "r" and choice != "y" and choice != "n" and choice != "v" and choice != "C" and choice != "V":
             print("Mapping #" + str(c))
             print("=====================================")
             file_name = "main/cacher/data/" + lang +  "/" + str(c) + ".p"
+            full_map_name = file_name + "_f.p"
+            cons_map_name = file_name + "_c.p"
+            vowel_map_name = file_name + "_v.p"
 
-            if os.path.exists(file_name):
-                print("Loading from file: " + file_name)
+            if os.path.exists(full_map_name):
+                print("Loading from files: " + str([full_map_name, cons_map_name, vowel_map_name]))
                 try:
-                    mapping = pickle.load(open(file_name, "rb"))
+                    mapping = pickle.load(open(full_map_name, "rb"))
+                    mapping_v = pickle.load(open(vowel_map_name, "rb"))
+                    mapping_c = pickle.load(open(cons_map_name, "rb"))
                 except:
                     print("Error loading file: " + file_name)
                     c += 1
                     print("Mapping #" + str(c))
                     print("=====================================")
-                    mapping = generate_unique_consonant_vowel_mappings(eng_consonants, eng_vowel_phonemes, c, printout=True)
+                    mapping, mapping_v, mapping_c = generate_unique_consonant_vowel_mappings(eng_consonants, eng_vowel_phonemes, c, printout=True, remix_v=remix_v, remix_c=remix_c)
             else:
-                mapping = generate_unique_consonant_vowel_mappings(eng_consonants, eng_vowel_phonemes, c, printout=True)  
+                mapping, mapping_v, mapping_c = generate_unique_consonant_vowel_mappings(eng_consonants, eng_vowel_phonemes, c, printout=True, remix_v=remix_v, remix_c=remix_c)  
 
         if choice != 'y':
             transcribed = transcribe(sentence, mapping)
             print(transcribed)
-            speak(transcribed, "Zeina")
+            speak(transcribed, speaker)
             print("\n")
         
-        choice = input("'y' to keep this mapping, 'c' to continue, 'd' to delete this mapping, , 'q' to quit, 'r' to repeat the sentence, 's' to jump to a specific entry, or simply type a new sentence: ")
+        print_menu(remix_c, remix_v)
+        choice = input("Enter your choice now: ")
         time.sleep(.5)
-        print(choice)
         if choice == "y":
-            pickle.dump(mapping, open(file_name, "wb"))
+            pickle.dump(mapping, open(full_map_name, "wb"))
+            pickle.dump(mapping_c, open(cons_map_name, "wb"))
+            pickle.dump(mapping_v, open(vowel_map_name, "wb"))
             print(f"Mapping {c} saved successfully.")
-            print(pickle.load(open(file_name, "rb")))
+            print(pickle.load(open(full_map_name, "rb")))
 
             time.sleep(.5)
 
@@ -172,6 +188,56 @@ def test_phonemes(sentence, lang="eng", printout=False):
         elif choice == "s":
             c = int(input("Enter the mapping number to jump to: "))
 
+        elif choice == "v":
+            print("Remapping vowel phonemes...")
+            remixed_v = remix_mapping(mapping_v, printout=True)
+            mapping_v = remixed_v
+            mapping = {**mapping_c, **remixed_v}
+        
+        elif choice == "n":
+            print("Remapping consonant phonemes...")
+            remixed_c = remix_mapping(mapping_c, printout=True)
+            mapping_c = remixed_c
+            mapping = {**remixed_c, **mapping_v}
+        
+        elif choice == "C":
+            if remix_c:
+                remix_c = False
+                cons_list = list(eng_consonants)
+                mapping_c = dict(zip(cons_list, cons_list))
+                mapping = {**mapping_c, **mapping_v}
+                print("Consonant phonemes will not be remixed anymore.")
+            else:
+                remix_c = True
+                remixed_c = remix_mapping(mapping_c, printout=True)
+                mapping_c = remixed_c
+                mapping = {**remixed_c, **mapping_v}
+                print("Consonant phonemes will be remixed again.")
+            print(mapping_c)
+
+        elif choice == "V":
+            if remix_v:
+                remix_v = False
+                vowel_list = list(eng_vowel_phonemes)
+                mapping_v = dict(zip(vowel_list, vowel_list))
+                mapping = {**mapping_c, **mapping_v}
+                print("Vowel phonemes will not be remixed anymore.")
+            else:
+                remix_v = True
+                remixed_v = remix_mapping(mapping_v, printout=True)
+                mapping_v = remixed_v
+                mapping = {**mapping_c, **remixed_v}
+                print("Vowel phonemes will be remixed again.")
+            print(mapping_v)
+
+        elif choice == "p":
+            print("Printing current mapping:")
+            print(mapping)
+            print("Consonant mapping:")
+            print(mapping_c)
+            print("Vowel mapping:")
+            print(mapping_v)
+ 
         elif choice != "r":
             sentence = choice
             choice = "r"
@@ -185,6 +251,19 @@ def delete_file(file_name):
         print(f"File {file_name} not found.")
     except Exception as e:
         print(f"Error deleting file {file_name}: {e}")
+
+def print_menu(remix_c, remix_v):
+    print("'y' to keep this mapping")
+    print("'c' to continue to the next mapping")
+    print("'d' to delete this mapping")
+    print("'q' to quit")
+    print("'r' to repeat the sentence")
+    print("'s' to jump to a specific entry")
+    print("'v' to remix vowel phonemes")
+    print("'n' to remix consonant phonemes")
+    print("'C' to stop/start remixing consonant phonemes. Currently: " + str(remix_c))
+    print("'V' to stop/start remixing vowel phonemes. Currently: " + str(remix_v))
+
 
 def main():
     run_menu("eng")
